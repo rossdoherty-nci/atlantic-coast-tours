@@ -174,7 +174,11 @@
 /* ---------- Configuration ---------- */
 const SHEET_ID = "1balBGf8QhZ5dc-RCCAPt2kcrcf6m_YRh0HL_r8bBtJw"; // Atlantic Coast Tours live sheet
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-const MODEL = "claude-sonnet-4-6";
+// Deliberately left unset: Puter's default model is the one proven in their
+// own docs to reliably trigger real tool_calls rather than just narrating
+// "let me check that" as plain text. If you want to name a specific model in
+// your write-up, test it first — some route function-calling less reliably.
+const MODEL = undefined;
 
 const SYSTEM_PROMPT = `You are the customer support assistant for Atlantic Coast Tours, a small tour
 operator running boat trips, hikes, and coach tours along the west of Ireland (Galway Bay,
@@ -193,7 +197,11 @@ Rules you must follow:
 4. You are being deliberately tested with off-topic and absurd questions (e.g. "can I order food?").
    Answer them honestly and naturally as yourself — do not refuse to engage, and do not pretend you
    only have scripted replies. Then gently steer back to how you can help with tours.
-5. Keep answers concise, warm, and customer-friendly. Use plain text, no markdown headers.`;
+5. Keep answers concise, warm, and customer-friendly. Use plain text, no markdown headers.
+6. NEVER say things like "let me check that" or "I'll grab that for you now" as a standalone
+   reply without actually calling the tool in that same turn. If you need data, call the tool
+   immediately — don't announce it and stop. Only write conversational text once you either
+   have the real data back from a tool, or the question needs no tool at all.`;
 
 const TOOLS = [
   {
