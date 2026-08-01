@@ -6,7 +6,6 @@
 <title>Atlantic Coast Tours — Ask Us Anything</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://js.puter.com/v2/"></script>
 <style>
   :root{
     --deep-atlantic:#132A3A;   /* near-black navy, the open water */
@@ -163,15 +162,8 @@
   </div>
 
   <div class="panel">
-    <div id="authGate" style="padding:22px 18px; text-align:center;">
-      <p style="margin:0 0 12px; color:var(--stone); font-size:14px;">
-        This chatbot uses a live AI model via Puter (free, no API key required).<br>Connect a free Puter account to start chatting.
-      </p>
-      <button id="connectBtn" style="background:var(--rust); color:var(--spray); border:none; border-radius:9px; padding:10px 22px; font-size:14px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;">Connect to start chatting</button>
-      <p id="authStatus" style="margin:10px 0 0; font-size:12.5px; color:var(--stone);"></p>
-    </div>
-    <div id="log" style="display:none;"></div>
-    <div class="composer" id="composer" style="display:none;">
+    <div id="log"></div>
+    <div class="composer" id="composer">
       <textarea id="input" rows="1" placeholder="e.g. What's the price of the Cliffs of Moher boat tour?"></textarea>
       <button id="send">Send</button>
     </div>
@@ -192,14 +184,17 @@
 </div>
 
 <script>
-/* ---------- Configuration ---------- */
+/* ==========================================================================
+   CONFIGURATION
+   ========================================================================== */
 const SHEET_ID = "1balBGf8QhZ5dc-RCCAPt2kcrcf6m_YRh0HL_r8bBtJw"; // Atlantic Coast Tours live sheet
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
-// Deliberately left unset: Puter's default model is the one proven in their
-// own docs to reliably trigger real tool_calls rather than just narrating
-// "let me check that" as plain text. If you want to name a specific model in
-// your write-up, test it first — some route function-calling less reliably.
-const MODEL = undefined;
+
+// PASTE YOUR OWN CLOUDFLARE WORKER URL HERE after you deploy it (see setup notes).
+// It should look like: https://your-worker-name.your-subdomain.workers.dev
+const WORKER_URL = "https://rossdohertynci.x25134621.workers.dev/";
+
+const MODEL = "llama-3.3-70b-versatile"; // Groq's free-tier model with reliable tool-calling support, called via the Worker proxy above.
 
 const SYSTEM_PROMPT = `You are the customer support assistant for Atlantic Coast Tours, a small tour
 operator running boat trips, hikes, and coach tours along the west of Ireland (Galway Bay,
@@ -247,7 +242,32 @@ const TOOLS = [
   }
 ];
 
-/* ---------- Tool implementations ---------- */
+/* ==========================================================================
+   AI PROXY CALL (via your Cloudflare Worker -> Google Gemini)
+   ========================================================================== */
+async function callAI(messages, tools) {
+  const res = await fetch(WORKER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: MODEL, messages, tools })
+  });
+  const raw = await res.text();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { throw new Error(`Worker returned non-JSON (status ${res.status}): ${raw.slice(0, 300)}`); }
+  if (!res.ok || data.error) {
+    const msg = typeof data.error === "string" ? data.error : JSON.stringify(data.error || data);
+    throw new Error(`AI proxy error (status ${res.status}): ${msg.slice(0, 400)}`);
+  }
+  if (!data.choices || !data.choices[0]) {
+    throw new Error("Unexpected response shape from AI proxy: " + raw.slice(0, 300));
+  }
+  return data.choices[0].message;
+}
+
+/* ==========================================================================
+   TOOL IMPLEMENTATIONS
+   ========================================================================== */
 
 // Minimal CSV parser (handles quoted fields/commas) - no external deps.
 function parseCSV(text) {
@@ -326,11 +346,10 @@ async function get_weather({ location }) {
 
 const TOOL_IMPL = { get_weather };
 
-/* ---------- Chat state & UI ---------- */
-// history holds only real user/assistant turns. The tour data + system prompt
-// are rebuilt fresh and prepended on every single call — this is what
-// guarantees "live at the moment of the question" rather than a cached copy.
-let history = [];
+/* ==========================================================================
+   CHAT STATE & UI
+   ========================================================================== */
+let history = []; // real user/assistant/tool turns only; system + live data are rebuilt fresh each call
 
 const log = document.getElementById("log");
 const input = document.getElementById("input");
@@ -340,11 +359,16 @@ function escapeHTML(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
-// Light markdown -> HTML: **bold**, "- " / "1. " lists. Line breaks are
-// handled by white-space:pre-wrap in CSS, so we leave \n alone.
+function inlineMd(text) {
+  let t = escapeHTML(text);
+  t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
+  return t;
+}
+
 function formatBotText(raw) {
   const lines = raw.split("\n");
-  let html = "", inList = null; // 'ul' | 'ol' | null
+  let html = "", inList = null;
   const closeList = () => { if (inList) { html += `</${inList}>`; inList = null; } };
   for (const line of lines) {
     const bullet = /^\s*[-*]\s+(.*)/.exec(line);
@@ -363,31 +387,22 @@ function formatBotText(raw) {
   closeList();
   return html;
 }
-function inlineMd(text) {
-  let t = escapeHTML(text);
-  t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-  t = t.replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
-  return t;
-}
 
 function addBubble(role, text) {
   const div = document.createElement("div");
   div.className = "msg " + role;
-  const label = { user: "You", bot: "Atlantic Coast Tours", tool: "Live tool call", error: "Error" }[role];
+  const label = { user: "You", bot: "Atlantic Coast Tours", error: "Error" }[role];
   div.innerHTML = `<div class="role">${label}</div><div class="bubble"></div>`;
   const bubble = div.querySelector(".bubble");
-  if (role === "bot") {
-    bubble.innerHTML = formatBotText(text);
-  } else {
-    bubble.textContent = text;
-  }
+  if (role === "bot") bubble.innerHTML = formatBotText(text);
+  else bubble.textContent = text;
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
   return bubble;
 }
 
-// Renders a tool call as a collapsed <details> so it's available as evidence
-// (Task 2 screenshots) without cluttering every turn of the conversation.
+// Renders a tool call as a collapsed <details>, hidden entirely from the
+// customer view unless the "Show live-data proof" toggle is checked.
 function addToolBubble(name, args, result) {
   const div = document.createElement("div");
   div.className = "msg tool";
@@ -405,24 +420,15 @@ function addToolBubble(name, args, result) {
   log.scrollTop = log.scrollHeight;
 }
 
-function getFinalText(response) {
-  return typeof response.message.content === "string"
-    ? response.message.content
-    : (response.message.content?.[0]?.text ?? "");
-}
-
-// Heuristic: catches replies that only announce an action instead of doing it
-// or answering, e.g. "Let me check that for you now!" with nothing else.
 function looksLikeStall(text) {
   if (!text || text.length > 220) return false;
-  return /\b(let me|i'll|i will|one moment|hold on|give me a (moment|second|sec)|right now|checking now)\b/i.test(text);
+  return /\b(let me|i.ll|i will|one moment|hold on|give me a (moment|second|sec)|right now|checking now)\b/i.test(text);
 }
 
 async function runTurn(userText) {
   history.push({ role: "user", content: userText });
   addBubble("user", userText);
   sendBtn.disabled = true;
-
   const thinking = addBubble("bot", "…thinking…");
 
   try {
@@ -442,39 +448,33 @@ async function runTurn(userText) {
       ...history
     ]);
 
-    let response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
-
-    // Resolve any weather tool calls.
+    let message = await callAI(buildMessages(), TOOLS);
     let rounds = 0;
-    while (response.message.tool_calls && response.message.tool_calls.length > 0 && rounds < 4) {
+    while (message.tool_calls && message.tool_calls.length > 0 && rounds < 4) {
       rounds++;
-      history.push(response.message);
-      for (const call of response.message.tool_calls) {
+      history.push({ role: "assistant", content: message.content || null, tool_calls: message.tool_calls });
+      for (const call of message.tool_calls) {
         const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
         let result;
-        try {
-          result = await TOOL_IMPL[call.function.name](args);
-        } catch (err) {
-          result = `Tool error: ${err.message}`;
-        }
+        try { result = await TOOL_IMPL[call.function.name](args); }
+        catch (err) { result = `Tool error: ${err.message}`; }
         addToolBubble(call.function.name, args, result);
         history.push({ role: "tool", tool_call_id: call.id, content: String(result) });
       }
-      response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
+      message = await callAI(buildMessages(), TOOLS);
     }
 
-    let finalText = getFinalText(response);
+    let finalText = message.content || "";
 
-    // Anti-stall safeguard: if the model just announced an action with no tool
-    // call and no real content, nudge it once, firmly, rather than dead-ending.
-    if (looksLikeStall(finalText) && (!response.message.tool_calls || !response.message.tool_calls.length)) {
+    // Anti-stall safeguard: nudge once, firmly, if the model only announced an action.
+    if (looksLikeStall(finalText) && (!message.tool_calls || !message.tool_calls.length)) {
       history.push({ role: "assistant", content: finalText });
-      history.push({ role: "user", content: "You didn't actually call a tool or answer. Answer now using the live tour data already given to you, or call get_weather immediately if needed. Do not just say you'll check." });
-      response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
-      while (response.message.tool_calls && response.message.tool_calls.length > 0 && rounds < 5) {
+      history.push({ role: "user", content: "You did not actually call a tool or answer. Answer now using the live tour data already given to you, or call get_weather immediately if needed. Do not just say you will check." });
+      message = await callAI(buildMessages(), TOOLS);
+      while (message.tool_calls && message.tool_calls.length > 0 && rounds < 5) {
         rounds++;
-        history.push(response.message);
-        for (const call of response.message.tool_calls) {
+        history.push({ role: "assistant", content: message.content || null, tool_calls: message.tool_calls });
+        for (const call of message.tool_calls) {
           const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
           let result;
           try { result = await TOOL_IMPL[call.function.name](args); }
@@ -482,13 +482,13 @@ async function runTurn(userText) {
           addToolBubble(call.function.name, args, result);
           history.push({ role: "tool", tool_call_id: call.id, content: String(result) });
         }
-        response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
+        message = await callAI(buildMessages(), TOOLS);
       }
-      finalText = getFinalText(response);
-      history.pop(); history.pop(); // remove the internal nudge + stalled reply from visible history
+      finalText = message.content || "";
+      history.pop(); history.pop(); // remove the internal nudge from visible history
     }
 
-    thinking.textContent = finalText || "(no reply text returned)";
+    thinking.innerHTML = formatBotText(finalText || "(no reply text returned)");
     history.push({ role: "assistant", content: finalText });
   } catch (err) {
     thinking.parentElement.className = "msg error";
@@ -517,39 +517,9 @@ proofToggle.addEventListener("change", () => {
   log.classList.toggle("show-proof", proofToggle.checked);
 });
 
-/* ---------- Auth gate ---------- */
-const authGate = document.getElementById("authGate");
-const connectBtn = document.getElementById("connectBtn");
-const authStatus = document.getElementById("authStatus");
-const composer = document.getElementById("composer");
-
-function unlockChat() {
-  authGate.style.display = "none";
-  log.style.display = "flex";
-  composer.style.display = "flex";
-  addBubble("bot", "Hello! I'm the Atlantic Coast Tours assistant. Ask me about our tours, prices, availability, or the weather for any trip.");
-}
-
-connectBtn.addEventListener("click", async () => {
-  // IMPORTANT: signIn() must be called directly inside a click handler with no
-  // awaited work before it, or browsers block the popup as unsolicited and the
-  // call silently fails (you'll see 401s from api.puter.com/whoami afterwards).
-  connectBtn.disabled = true;
-  connectBtn.textContent = "Connecting…";
-  try {
-    await puter.auth.signIn();
-    unlockChat();
-  } catch (err) {
-    authStatus.textContent = "Sign-in didn't complete: " + err.message + ". If a popup was blocked, allow popups for this site and try again.";
-    connectBtn.disabled = false;
-    connectBtn.textContent = "Connect to start chatting";
-  }
-});
-
-// If already signed in from a previous visit, skip the gate entirely.
-if (puter.auth.isSignedIn()) {
-  unlockChat();
-}
+// No sign-in step needed: the Worker holds the real credential, so chat is
+// available immediately.
+addBubble("bot", "Hello! I'm the Atlantic Coast Tours assistant. Ask me about our tours, prices, availability, or the weather for any trip.");
 </script>
 </body>
 </html>
