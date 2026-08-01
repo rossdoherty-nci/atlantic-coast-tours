@@ -147,8 +147,15 @@
   </div>
 
   <div class="panel">
-    <div id="log"></div>
-    <div class="composer">
+    <div id="authGate" style="padding:22px 18px; text-align:center;">
+      <p style="margin:0 0 12px; color:var(--stone); font-size:14px;">
+        This chatbot uses a live AI model via Puter (free, no API key required).<br>Connect a free Puter account to start chatting.
+      </p>
+      <button id="connectBtn" style="background:var(--rust); color:var(--spray); border:none; border-radius:9px; padding:10px 22px; font-size:14px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;">Connect to start chatting</button>
+      <p id="authStatus" style="margin:10px 0 0; font-size:12.5px; color:var(--stone);"></p>
+    </div>
+    <div id="log" style="display:none;"></div>
+    <div class="composer" id="composer" style="display:none;">
       <textarea id="input" rows="1" placeholder="e.g. What's the price of the Cliffs of Moher boat tour?"></textarea>
       <button id="send">Send</button>
     </div>
@@ -362,8 +369,39 @@ document.querySelectorAll(".chip").forEach(chip => {
   chip.addEventListener("click", () => { input.value = chip.dataset.q; sendBtn.click(); });
 });
 
-// Greet on load
-addBubble("bot", "Hello! I'm the Atlantic Coast Tours assistant. Ask me about our tours, prices, availability, or the weather for any trip.");
+/* ---------- Auth gate ---------- */
+const authGate = document.getElementById("authGate");
+const connectBtn = document.getElementById("connectBtn");
+const authStatus = document.getElementById("authStatus");
+const composer = document.getElementById("composer");
+
+function unlockChat() {
+  authGate.style.display = "none";
+  log.style.display = "flex";
+  composer.style.display = "flex";
+  addBubble("bot", "Hello! I'm the Atlantic Coast Tours assistant. Ask me about our tours, prices, availability, or the weather for any trip.");
+}
+
+connectBtn.addEventListener("click", async () => {
+  // IMPORTANT: signIn() must be called directly inside a click handler with no
+  // awaited work before it, or browsers block the popup as unsolicited and the
+  // call silently fails (you'll see 401s from api.puter.com/whoami afterwards).
+  connectBtn.disabled = true;
+  connectBtn.textContent = "Connecting…";
+  try {
+    await puter.auth.signIn();
+    unlockChat();
+  } catch (err) {
+    authStatus.textContent = "Sign-in didn't complete: " + err.message + ". If a popup was blocked, allow popups for this site and try again.";
+    connectBtn.disabled = false;
+    connectBtn.textContent = "Connect to start chatting";
+  }
+});
+
+// If already signed in from a previous visit, skip the gate entirely.
+if (puter.auth.isSignedIn()) {
+  unlockChat();
+}
 </script>
 </body>
 </html>
