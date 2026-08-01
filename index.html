@@ -88,14 +88,30 @@
     background:rgba(242,239,230,0.06);
     border:1px solid rgba(185,196,194,0.14);
     border-radius:3px 14px 14px 14px; padding:10px 14px;
+    white-space:pre-wrap; word-break:break-word;
   }
-  .msg.tool{align-self:flex-start; max-width:100%;}
+  .msg.bot .bubble ul, .msg.bot .bubble ol{ margin:6px 0; padding-left:20px; white-space:normal; }
+  .msg.bot .bubble li{ margin:2px 0; }
+  .msg.tool details{ cursor:pointer; }
+  .msg.tool summary{
+    font-family:'Work Sans',sans-serif; font-size:12px; color:var(--stone);
+    list-style:none; display:flex; align-items:center; gap:6px;
+  }
+  .msg.tool summary::-webkit-details-marker{ display:none; }
+  .msg.tool summary::before{ content:"▸"; display:inline-block; transition:transform .15s; }
+  .msg.tool details[open] summary::before{ transform:rotate(90deg); }
+  .msg.tool pre{ margin:8px 0 0; white-space:pre-wrap; word-break:break-word; }
+  .msg.tool{align-self:flex-start; max-width:100%; display:none;}
+  #log.show-proof .msg.tool{ display:block; }
   .msg.tool .bubble{
-    font-family:'SFMono-Regular', Consolas, monospace;
+    font-family:'Work Sans', sans-serif;
     font-size:12px; color:var(--stone);
     background:rgba(176,86,47,0.08);
     border:1px dashed rgba(176,86,47,0.35);
-    border-radius:8px; padding:8px 12px; white-space:pre-wrap; word-break:break-word;
+    border-radius:8px; padding:8px 12px;
+  }
+  .msg.tool .bubble pre{
+    font-family:'SFMono-Regular', Consolas, monospace; font-size:11.5px;
   }
   .msg.error .bubble{
     background:rgba(176,86,47,0.15); border:1px solid rgba(176,86,47,0.5); color:#F2D9CC;
@@ -167,6 +183,11 @@
     <button class="chip" data-q="If I gave you a sonnet about seagulls, could you critique the meter?">Off-topic: seagull sonnet</button>
   </div>
 
+  <label id="proofToggleWrap" style="display:flex; align-items:center; gap:7px; margin-top:16px; font-size:12px; color:var(--stone); cursor:pointer; user-select:none;">
+    <input type="checkbox" id="proofToggle" style="accent-color:var(--rust);">
+    Show live-data proof (for your assignment screenshots — hidden from real customers)
+  </label>
+
   <div class="tideline"></div>
 </div>
 
@@ -184,34 +205,32 @@ const SYSTEM_PROMPT = `You are the customer support assistant for Atlantic Coast
 operator running boat trips, hikes, and coach tours along the west of Ireland (Galway Bay,
 Connemara, the Cliffs of Moher, the Aran Islands, and similar).
 
+You will be given a block of LIVE TOUR DATA before each customer message, freshly fetched from the
+company's live booking sheet moments ago. Use it as your only source for prices, availability,
+stock, dates, and offers — never guess or answer from memory, and never say you need to "check" or
+"look up" that data, since it is already provided to you below.
+
 Rules you must follow:
-1. For ANY question about a tour's price, availability, stock, dates, or offers, you MUST call
-   get_tour_data first and answer only from what it returns. Never guess or answer from memory.
-2. For any question involving weather, conditions, or "will it go ahead", call get_weather with
-   the relevant place name. If the question involves both a tour and conditions for it, call
-   BOTH get_tour_data and get_weather and combine them into one useful answer.
-3. Report live data EXACTLY as returned, even if a value looks wrong, absurdly high or low, or an
-   item shows zero stock/availability. Never silently "correct", round, or omit a figure that looks
-   implausible. State it plainly, flag that it looks unusual, and suggest the customer confirm with
-   a human before booking. Do not invent a more "sensible" number.
-4. You are being deliberately tested with off-topic and absurd questions (e.g. "can I order food?").
+1. Report the live tour data EXACTLY as given, even if a value looks wrong, absurdly high or low,
+   or an item shows zero stock/availability. Never silently "correct", round, or omit a figure that
+   looks implausible. State it plainly, flag that it looks unusual, and suggest the customer confirm
+   with a human before booking. Do not invent a more "sensible" number.
+2. For any question involving weather or conditions (e.g. "will it go ahead", "what's it like out"),
+   call the get_weather tool with the relevant place name, in the SAME turn, immediately — never say
+   "let me check the weather" without actually calling the tool right then.
+3. You are being deliberately tested with off-topic and absurd questions (e.g. "can I order food?").
    Answer them honestly and naturally as yourself — do not refuse to engage, and do not pretend you
    only have scripted replies. Then gently steer back to how you can help with tours.
-5. Keep answers concise, warm, and customer-friendly. Use plain text, no markdown headers.
-6. NEVER say things like "let me check that" or "I'll grab that for you now" as a standalone
-   reply without actually calling the tool in that same turn. If you need data, call the tool
-   immediately — don't announce it and stop. Only write conversational text once you either
-   have the real data back from a tool, or the question needs no tool at all.`;
+4. Keep answers concise, warm, and customer-friendly. Use plain text, no markdown headers.
+5. When your answer involves more than one tour or item, put EACH one on its own line, starting
+   that line with "- " (a hyphen and a space) — never run multiple tours together in one paragraph
+   separated by dashes or commas. Example of the format to use:
+   - Cliffs of Moher Guided Cliff Walk — €45, 6 slots left
+   - Aran Islands Day Tour — €55, 3 slots left
+6. Never write a standalone reply that only announces an action ("let me grab that", "one moment").
+   Either call get_weather right away, or answer directly using the tour data you already have.`;
 
 const TOOLS = [
-  {
-    type: "function",
-    function: {
-      name: "get_tour_data",
-      description: "Fetches the live, current Atlantic Coast Tours catalogue (tour names, prices, locations, available slots/stock) directly from the company's live Google Sheet. Always call this before answering any question about prices, availability, or offers — never answer from memory.",
-      parameters: { type: "object", properties: {}, required: [] }
-    }
-  },
   {
     type: "function",
     function: {
@@ -253,6 +272,8 @@ function parseCSV(text) {
   return rows.filter(r => r.some(cell => cell.trim() !== ""));
 }
 
+// Fetches the live sheet fresh, every single call — this is what makes Task 2's
+// "live at the moment of the question" requirement true regardless of AI behaviour.
 async function get_tour_data() {
   const res = await fetch(SHEET_CSV_URL + "&t=" + Date.now(), { cache: "no-store" });
   if (!res.ok) throw new Error(`Sheet fetch failed: HTTP ${res.status}`);
@@ -303,39 +324,131 @@ async function get_weather({ location }) {
   return JSON.stringify(summary);
 }
 
-const TOOL_IMPL = { get_tour_data, get_weather };
+const TOOL_IMPL = { get_weather };
 
 /* ---------- Chat state & UI ---------- */
-let messages = [{ role: "system", content: SYSTEM_PROMPT }];
+// history holds only real user/assistant turns. The tour data + system prompt
+// are rebuilt fresh and prepended on every single call — this is what
+// guarantees "live at the moment of the question" rather than a cached copy.
+let history = [];
 
 const log = document.getElementById("log");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
+
+function escapeHTML(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// Light markdown -> HTML: **bold**, "- " / "1. " lists. Line breaks are
+// handled by white-space:pre-wrap in CSS, so we leave \n alone.
+function formatBotText(raw) {
+  const lines = raw.split("\n");
+  let html = "", inList = null; // 'ul' | 'ol' | null
+  const closeList = () => { if (inList) { html += `</${inList}>`; inList = null; } };
+  for (const line of lines) {
+    const bullet = /^\s*[-*]\s+(.*)/.exec(line);
+    const numbered = /^\s*\d+[.)]\s+(.*)/.exec(line);
+    if (bullet) {
+      if (inList !== "ul") { closeList(); html += "<ul>"; inList = "ul"; }
+      html += `<li>${inlineMd(bullet[1])}</li>`;
+    } else if (numbered) {
+      if (inList !== "ol") { closeList(); html += "<ol>"; inList = "ol"; }
+      html += `<li>${inlineMd(numbered[1])}</li>`;
+    } else {
+      closeList();
+      html += inlineMd(line) + "\n";
+    }
+  }
+  closeList();
+  return html;
+}
+function inlineMd(text) {
+  let t = escapeHTML(text);
+  t = t.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  t = t.replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "<em>$1</em>");
+  return t;
+}
 
 function addBubble(role, text) {
   const div = document.createElement("div");
   div.className = "msg " + role;
   const label = { user: "You", bot: "Atlantic Coast Tours", tool: "Live tool call", error: "Error" }[role];
   div.innerHTML = `<div class="role">${label}</div><div class="bubble"></div>`;
-  div.querySelector(".bubble").textContent = text;
+  const bubble = div.querySelector(".bubble");
+  if (role === "bot") {
+    bubble.innerHTML = formatBotText(text);
+  } else {
+    bubble.textContent = text;
+  }
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
-  return div.querySelector(".bubble");
+  return bubble;
+}
+
+// Renders a tool call as a collapsed <details> so it's available as evidence
+// (Task 2 screenshots) without cluttering every turn of the conversation.
+function addToolBubble(name, args, result) {
+  const div = document.createElement("div");
+  div.className = "msg tool";
+  const argsStr = JSON.stringify(args);
+  const resultStr = String(result);
+  const preview = resultStr.slice(0, 700) + (resultStr.length > 700 ? "…" : "");
+  div.innerHTML = `<div class="role">Live tool call</div>
+    <div class="bubble">
+      <details>
+        <summary>${escapeHTML(name)}(${escapeHTML(argsStr)}) — fetched live, click to view</summary>
+        <pre>${escapeHTML(preview)}</pre>
+      </details>
+    </div>`;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function getFinalText(response) {
+  return typeof response.message.content === "string"
+    ? response.message.content
+    : (response.message.content?.[0]?.text ?? "");
+}
+
+// Heuristic: catches replies that only announce an action instead of doing it
+// or answering, e.g. "Let me check that for you now!" with nothing else.
+function looksLikeStall(text) {
+  if (!text || text.length > 220) return false;
+  return /\b(let me|i'll|i will|one moment|hold on|give me a (moment|second|sec)|right now|checking now)\b/i.test(text);
 }
 
 async function runTurn(userText) {
-  messages.push({ role: "user", content: userText });
+  history.push({ role: "user", content: userText });
   addBubble("user", userText);
   sendBtn.disabled = true;
 
   const thinking = addBubble("bot", "…thinking…");
 
   try {
-    let response = await puter.ai.chat(messages, { model: MODEL, tools: TOOLS });
+    // Step 1: always fetch the sheet fresh, unconditionally, before asking the AI anything.
+    let tourDataJSON;
+    try {
+      tourDataJSON = await get_tour_data();
+      addToolBubble("get_tour_data", {}, tourDataJSON);
+    } catch (err) {
+      tourDataJSON = `ERROR: could not fetch the live sheet (${err.message}). Tell the customer live pricing is temporarily unavailable — do not make up prices.`;
+      addToolBubble("get_tour_data", {}, `ERROR: ${err.message}`);
+    }
 
-    // Tool-calling loop: keep resolving tool calls until the model gives a final text answer.
-    while (response.message.tool_calls && response.message.tool_calls.length > 0) {
-      messages.push(response.message);
+    const buildMessages = () => ([
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: `LIVE TOUR DATA (fetched just now, moments ago):\n${tourDataJSON}` },
+      ...history
+    ]);
+
+    let response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
+
+    // Resolve any weather tool calls.
+    let rounds = 0;
+    while (response.message.tool_calls && response.message.tool_calls.length > 0 && rounds < 4) {
+      rounds++;
+      history.push(response.message);
       for (const call of response.message.tool_calls) {
         const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
         let result;
@@ -344,17 +457,39 @@ async function runTurn(userText) {
         } catch (err) {
           result = `Tool error: ${err.message}`;
         }
-        addBubble("tool", `${call.function.name}(${JSON.stringify(args)}) →\n${String(result).slice(0, 600)}${String(result).length > 600 ? "…" : ""}`);
-        messages.push({ role: "tool", tool_call_id: call.id, content: String(result) });
+        addToolBubble(call.function.name, args, result);
+        history.push({ role: "tool", tool_call_id: call.id, content: String(result) });
       }
-      response = await puter.ai.chat(messages, { model: MODEL, tools: TOOLS });
+      response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
     }
 
-    const finalText = typeof response.message.content === "string"
-      ? response.message.content
-      : (response.message.content?.[0]?.text ?? String(response));
-    thinking.textContent = finalText;
-    messages.push({ role: "assistant", content: finalText });
+    let finalText = getFinalText(response);
+
+    // Anti-stall safeguard: if the model just announced an action with no tool
+    // call and no real content, nudge it once, firmly, rather than dead-ending.
+    if (looksLikeStall(finalText) && (!response.message.tool_calls || !response.message.tool_calls.length)) {
+      history.push({ role: "assistant", content: finalText });
+      history.push({ role: "user", content: "You didn't actually call a tool or answer. Answer now using the live tour data already given to you, or call get_weather immediately if needed. Do not just say you'll check." });
+      response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
+      while (response.message.tool_calls && response.message.tool_calls.length > 0 && rounds < 5) {
+        rounds++;
+        history.push(response.message);
+        for (const call of response.message.tool_calls) {
+          const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+          let result;
+          try { result = await TOOL_IMPL[call.function.name](args); }
+          catch (err) { result = `Tool error: ${err.message}`; }
+          addToolBubble(call.function.name, args, result);
+          history.push({ role: "tool", tool_call_id: call.id, content: String(result) });
+        }
+        response = await puter.ai.chat(buildMessages(), { model: MODEL, tools: TOOLS });
+      }
+      finalText = getFinalText(response);
+      history.pop(); history.pop(); // remove the internal nudge + stalled reply from visible history
+    }
+
+    thinking.textContent = finalText || "(no reply text returned)";
+    history.push({ role: "assistant", content: finalText });
   } catch (err) {
     thinking.parentElement.className = "msg error";
     thinking.textContent = "Something went wrong talking to the AI: " + err.message;
@@ -375,6 +510,11 @@ input.addEventListener("keydown", (e) => {
 });
 document.querySelectorAll(".chip").forEach(chip => {
   chip.addEventListener("click", () => { input.value = chip.dataset.q; sendBtn.click(); });
+});
+
+const proofToggle = document.getElementById("proofToggle");
+proofToggle.addEventListener("change", () => {
+  log.classList.toggle("show-proof", proofToggle.checked);
 });
 
 /* ---------- Auth gate ---------- */
