@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlantic Coast Tours — Ask Us Anything</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://js.puter.com/v2/"></script>
+<style>
+  :root{
+    --deep-atlantic:#132A3A;   /* near-black navy, the open water */
+    --spray:#F2EFE6;           /* pale sea-foam cream */
+    --stone:#B9C4C2;           /* wet limestone grey-green */
+    --moss:#4E6B54;            /* Connemara hillside */
+    --rust:#B0562F;            /* weathered pier rust, single accent */
+    --ink:#0E1E29;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--deep-atlantic);
+    background-image:
+      radial-gradient(ellipse at 20% -10%, rgba(185,196,194,0.12), transparent 55%),
+      radial-gradient(ellipse at 100% 110%, rgba(176,86,47,0.08), transparent 50%);
+    color:var(--spray);
+    font-family:'Work Sans', sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .wrap{width:100%;max-width:720px;padding:28px 20px 40px;}
+
+  header{margin-bottom:18px;}
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--stone); margin:0 0 6px;
+  }
+  h1{
+    font-family:'Fraunces', serif; font-weight:600; font-style:italic;
+    font-size:clamp(30px,6vw,42px); margin:0 0 4px; line-height:1.05;
+    color:var(--spray);
+  }
+  .tagline{color:var(--stone); font-size:15px; margin:0 0 14px;}
+
+  .tideline{
+    height:1px; width:100%;
+    background:linear-gradient(90deg, transparent, var(--stone) 15%, var(--stone) 85%, transparent);
+    opacity:.35; margin:14px 0 18px;
+  }
+
+  .disclosure{
+    font-size:12.5px; line-height:1.5; color:var(--stone);
+    background:rgba(185,196,194,0.07);
+    border:1px solid rgba(185,196,194,0.18);
+    border-radius:8px; padding:10px 14px; margin-bottom:18px;
+  }
+  .disclosure b{color:var(--spray); font-weight:600;}
+
+  .panel{
+    background:rgba(15,32,44,0.55);
+    border:1px solid rgba(185,196,194,0.16);
+    border-radius:14px;
+    backdrop-filter:blur(6px);
+    overflow:hidden;
+  }
+
+  #log{
+    padding:18px 18px 6px;
+    max-height:56vh;
+    overflow-y:auto;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+  }
+  .msg{max-width:88%; font-size:15px; line-height:1.55;}
+  .msg .role{
+    font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--stone); margin-bottom:4px; opacity:.8;
+  }
+  .msg.user{align-self:flex-end; text-align:right;}
+  .msg.user .bubble{
+    background:var(--moss); color:var(--spray);
+    border-radius:14px 14px 3px 14px; padding:10px 14px; display:inline-block; text-align:left;
+  }
+  .msg.bot .bubble{
+    background:rgba(242,239,230,0.06);
+    border:1px solid rgba(185,196,194,0.14);
+    border-radius:3px 14px 14px 14px; padding:10px 14px;
+  }
+  .msg.tool{align-self:flex-start; max-width:100%;}
+  .msg.tool .bubble{
+    font-family:'SFMono-Regular', Consolas, monospace;
+    font-size:12px; color:var(--stone);
+    background:rgba(176,86,47,0.08);
+    border:1px dashed rgba(176,86,47,0.35);
+    border-radius:8px; padding:8px 12px; white-space:pre-wrap; word-break:break-word;
+  }
+  .msg.error .bubble{
+    background:rgba(176,86,47,0.15); border:1px solid rgba(176,86,47,0.5); color:#F2D9CC;
+    border-radius:8px; padding:10px 14px;
+  }
+
+  .composer{
+    display:flex; gap:8px; padding:14px 16px;
+    border-top:1px solid rgba(185,196,194,0.14);
+  }
+  #input{
+    flex:1; resize:none; background:rgba(242,239,230,0.05);
+    border:1px solid rgba(185,196,194,0.22); border-radius:9px;
+    color:var(--spray); font-family:'Work Sans',sans-serif; font-size:15px;
+    padding:10px 12px; outline:none;
+  }
+  #input:focus{border-color:var(--rust);}
+  #send{
+    background:var(--rust); color:var(--spray); border:none; border-radius:9px;
+    padding:0 20px; font-size:14px; font-weight:600; cursor:pointer; font-family:'Work Sans',sans-serif;
+  }
+  #send:disabled{opacity:.5; cursor:default;}
+  #send:hover:not(:disabled){filter:brightness(1.08);}
+
+  .suggestions{display:flex; flex-wrap:wrap; gap:8px; margin-top:14px;}
+  .chip{
+    font-size:12.5px; color:var(--stone); border:1px solid rgba(185,196,194,0.25);
+    border-radius:999px; padding:6px 12px; cursor:pointer; background:transparent;
+    font-family:'Work Sans',sans-serif;
+  }
+  .chip:hover{border-color:var(--rust); color:var(--spray);}
+
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:rgba(185,196,194,0.25); border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Atlantic Coast Tours</p>
+    <h1>Ask us anything about the coast</h1>
+    <p class="tagline">Tours, prices, availability, and live weather — west of Ireland.</p>
+  </header>
+
+  <div class="disclosure">
+    <b>You're talking to an AI assistant.</b> Replies are generated by a language model and may contain mistakes.
+    Prices and availability are fetched live from our booking sheet; weather comes from a public forecast service.
+    For a confirmed booking, a member of our team will always follow up before you're charged.
+  </div>
+
+  <div class="panel">
+    <div id="log"></div>
+    <div class="composer">
+      <textarea id="input" rows="1" placeholder="e.g. What's the price of the Cliffs of Moher boat tour?"></textarea>
+      <button id="send">Send</button>
+    </div>
+  </div>
+
+  <div class="suggestions" id="suggestions">
+    <button class="chip" data-q="Can I order food from you?">Can I order food from you?</button>
+    <button class="chip" data-q="What tours are running this weekend and what's the weather like for them?">Weather-aware tour check</button>
+    <button class="chip" data-q="If I gave you a sonnet about seagulls, could you critique the meter?">Off-topic: seagull sonnet</button>
+  </div>
+
+  <div class="tideline"></div>
+</div>
+
+<script>
+/* ---------- Configuration ---------- */
+const SHEET_ID = "1balBGf8QhZ5dc-RCCAPt2kcrcf6m_YRh0HL_r8bBtJw"; // Atlantic Coast Tours live sheet
+const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv`;
+const MODEL = "claude-sonnet-4-6";
+
+const SYSTEM_PROMPT = `You are the customer support assistant for Atlantic Coast Tours, a small tour
+operator running boat trips, hikes, and coach tours along the west of Ireland (Galway Bay,
+Connemara, the Cliffs of Moher, the Aran Islands, and similar).
+
+Rules you must follow:
+1. For ANY question about a tour's price, availability, stock, dates, or offers, you MUST call
+   get_tour_data first and answer only from what it returns. Never guess or answer from memory.
+2. For any question involving weather, conditions, or "will it go ahead", call get_weather with
+   the relevant place name. If the question involves both a tour and conditions for it, call
+   BOTH get_tour_data and get_weather and combine them into one useful answer.
+3. Report live data EXACTLY as returned, even if a value looks wrong, absurdly high or low, or an
+   item shows zero stock/availability. Never silently "correct", round, or omit a figure that looks
+   implausible. State it plainly, flag that it looks unusual, and suggest the customer confirm with
+   a human before booking. Do not invent a more "sensible" number.
+4. You are being deliberately tested with off-topic and absurd questions (e.g. "can I order food?").
+   Answer them honestly and naturally as yourself — do not refuse to engage, and do not pretend you
+   only have scripted replies. Then gently steer back to how you can help with tours.
+5. Keep answers concise, warm, and customer-friendly. Use plain text, no markdown headers.`;
+
+const TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "get_tour_data",
+      description: "Fetches the live, current Atlantic Coast Tours catalogue (tour names, prices, locations, available slots/stock) directly from the company's live Google Sheet. Always call this before answering any question about prices, availability, or offers — never answer from memory.",
+      parameters: { type: "object", properties: {}, required: [] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_weather",
+      description: "Gets the current live weather and short forecast for a named place on the west coast of Ireland (e.g. 'Galway', 'Cliffs of Moher', 'Aran Islands'), using Open-Meteo.",
+      parameters: {
+        type: "object",
+        properties: {
+          location: { type: "string", description: "Place name to get weather for, e.g. 'Galway' or 'Doolin'." }
+        },
+        required: ["location"]
+      }
+    }
+  }
+];
+
+/* ---------- Tool implementations ---------- */
+
+// Minimal CSV parser (handles quoted fields/commas) - no external deps.
+function parseCSV(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i], next = text[i + 1];
+    if (inQuotes) {
+      if (c === '"' && next === '"') { field += '"'; i++; }
+      else if (c === '"') { inQuotes = false; }
+      else { field += c; }
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { row.push(field); field = ""; }
+      else if (c === '\n' || c === '\r') {
+        if (field !== "" || row.length) { row.push(field); rows.push(row); row = []; field = ""; }
+        if (c === '\r' && next === '\n') i++;
+      } else field += c;
+    }
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(cell => cell.trim() !== ""));
+}
+
+async function get_tour_data() {
+  const res = await fetch(SHEET_CSV_URL + "&t=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`Sheet fetch failed: HTTP ${res.status}`);
+  const csv = await res.text();
+  const rows = parseCSV(csv);
+  if (!rows.length) return "The live sheet returned no rows.";
+  const headers = rows[0];
+  const data = rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = (r[i] ?? "").trim());
+    return obj;
+  });
+  return JSON.stringify({ fetched_at: new Date().toISOString(), row_count: data.length, rows: data });
+}
+
+const WMO = {0:"clear sky",1:"mainly clear",2:"partly cloudy",3:"overcast",45:"fog",48:"freezing fog",
+  51:"light drizzle",53:"drizzle",55:"heavy drizzle",61:"light rain",63:"rain",65:"heavy rain",
+  71:"light snow",73:"snow",75:"heavy snow",80:"light showers",81:"showers",82:"violent showers",
+  95:"thunderstorm",96:"thunderstorm with hail",99:"severe thunderstorm with hail"};
+
+async function get_weather({ location }) {
+  const geo = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1`);
+  const geoData = await geo.json();
+  if (!geoData.results || !geoData.results.length) {
+    return `Could not find a location match for "${location}".`;
+  }
+  const { latitude, longitude, name, admin1, country } = geoData.results[0];
+  const fRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,precipitation,wind_speed_10m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=3`);
+  const f = await fRes.json();
+  const cur = f.current;
+  const summary = {
+    location: [name, admin1, country].filter(Boolean).join(", "),
+    fetched_at: new Date().toISOString(),
+    current: {
+      temperature_c: cur.temperature_2m,
+      wind_kmh: cur.wind_speed_10m,
+      precipitation_mm: cur.precipitation,
+      conditions: WMO[cur.weather_code] || `code ${cur.weather_code}`
+    },
+    next_3_days: f.daily.time.map((d, i) => ({
+      date: d,
+      conditions: WMO[f.daily.weather_code[i]] || `code ${f.daily.weather_code[i]}`,
+      max_c: f.daily.temperature_2m_max[i],
+      min_c: f.daily.temperature_2m_min[i],
+      rain_chance_pct: f.daily.precipitation_probability_max[i]
+    }))
+  };
+  return JSON.stringify(summary);
+}
+
+const TOOL_IMPL = { get_tour_data, get_weather };
+
+/* ---------- Chat state & UI ---------- */
+let messages = [{ role: "system", content: SYSTEM_PROMPT }];
+
+const log = document.getElementById("log");
+const input = document.getElementById("input");
+const sendBtn = document.getElementById("send");
+
+function addBubble(role, text) {
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  const label = { user: "You", bot: "Atlantic Coast Tours", tool: "Live tool call", error: "Error" }[role];
+  div.innerHTML = `<div class="role">${label}</div><div class="bubble"></div>`;
+  div.querySelector(".bubble").textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div.querySelector(".bubble");
+}
+
+async function runTurn(userText) {
+  messages.push({ role: "user", content: userText });
+  addBubble("user", userText);
+  sendBtn.disabled = true;
+
+  const thinking = addBubble("bot", "…thinking…");
+
+  try {
+    let response = await puter.ai.chat(messages, { model: MODEL, tools: TOOLS });
+
+    // Tool-calling loop: keep resolving tool calls until the model gives a final text answer.
+    while (response.message.tool_calls && response.message.tool_calls.length > 0) {
+      messages.push(response.message);
+      for (const call of response.message.tool_calls) {
+        const args = call.function.arguments ? JSON.parse(call.function.arguments) : {};
+        let result;
+        try {
+          result = await TOOL_IMPL[call.function.name](args);
+        } catch (err) {
+          result = `Tool error: ${err.message}`;
+        }
+        addBubble("tool", `${call.function.name}(${JSON.stringify(args)}) →\n${String(result).slice(0, 600)}${String(result).length > 600 ? "…" : ""}`);
+        messages.push({ role: "tool", tool_call_id: call.id, content: String(result) });
+      }
+      response = await puter.ai.chat(messages, { model: MODEL, tools: TOOLS });
+    }
+
+    const finalText = typeof response.message.content === "string"
+      ? response.message.content
+      : (response.message.content?.[0]?.text ?? String(response));
+    thinking.textContent = finalText;
+    messages.push({ role: "assistant", content: finalText });
+  } catch (err) {
+    thinking.parentElement.className = "msg error";
+    thinking.textContent = "Something went wrong talking to the AI: " + err.message;
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+sendBtn.addEventListener("click", () => {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  runTurn(text);
+});
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+});
+document.querySelectorAll(".chip").forEach(chip => {
+  chip.addEventListener("click", () => { input.value = chip.dataset.q; sendBtn.click(); });
+});
+
+// Greet on load
+addBubble("bot", "Hello! I'm the Atlantic Coast Tours assistant. Ask me about our tours, prices, availability, or the weather for any trip.");
+</script>
+</body>
+</html>
